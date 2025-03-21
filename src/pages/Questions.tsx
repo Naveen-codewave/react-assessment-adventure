@@ -3,25 +3,29 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import Header from '@/components/Header';
-import QuestionCard from '@/components/QuestionCard';
+import QuestionView from '@/components/QuestionView';
 import ProgressBar from '@/components/ProgressBar';
-import { getRandomQuestions, Question } from '@/lib/questions';
+import CategorySelector from '@/components/CategorySelector';
+import { Question, QuestionCategory, getQuestionsGroupedByCategory } from '@/lib/questions';
 
 const Questions = () => {
   const navigate = useNavigate();
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<QuestionCategory | null>(null);
+  const [categoryQuestions, setCategoryQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, { rating: number; notes: string }>>({});
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    // Simulate loading questions
     const loadQuestions = async () => {
       setIsLoading(true);
       try {
-        // Get 5 random questions for this assessment
-        const loadedQuestions = getRandomQuestions(5);
-        setQuestions(loadedQuestions);
+        const groupedQuestions = getQuestionsGroupedByCategory();
+        // If a category is selected, set the questions for that category
+        if (selectedCategory && groupedQuestions[selectedCategory]) {
+          setCategoryQuestions(groupedQuestions[selectedCategory]);
+          setCurrentQuestionIndex(0);
+        }
       } catch (error) {
         console.error('Failed to load questions:', error);
         toast({
@@ -35,31 +39,53 @@ const Questions = () => {
     };
     
     loadQuestions();
-  }, []);
+  }, [selectedCategory]);
   
-  const handleAnswer = (answer: string) => {
-    const currentQuestion = questions[currentQuestionIndex];
+  const handleSelectCategory = (category: QuestionCategory) => {
+    setSelectedCategory(category);
+  };
+  
+  const handleRating = (questionId: number, rating: number) => {
     setAnswers(prev => ({
       ...prev,
-      [currentQuestion.id]: answer
+      [questionId]: {
+        ...prev[questionId],
+        rating
+      }
+    }));
+  };
+  
+  const handleNotes = (questionId: number, notes: string) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        notes
+      }
     }));
   };
   
   const handleNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
+    if (currentQuestionIndex < categoryQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      // Navigate to results when all questions are answered
+      // Check if there are more categories to assess
       navigate('/results', { 
         state: { 
-          totalQuestions: questions.length,
-          answeredQuestions: Object.keys(answers).length
+          answers,
+          assessedQuestions: Object.keys(answers).length
         } 
       });
     }
   };
   
-  const currentQuestion = questions[currentQuestionIndex];
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+  
+  const currentQuestion = categoryQuestions[currentQuestionIndex];
   
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-hidden">
@@ -76,22 +102,29 @@ const Questions = () => {
                 <div className="h-8 w-40 bg-secondary rounded-lg mx-auto"></div>
               </div>
             </div>
+          ) : !selectedCategory ? (
+            <CategorySelector onSelectCategory={handleSelectCategory} />
           ) : (
             <>
-              <div className="w-full max-w-3xl mb-8">
+              <div className="w-full max-w-4xl mb-8">
+                <h2 className="text-2xl font-bold mb-4">{selectedCategory}</h2>
                 <ProgressBar 
                   current={currentQuestionIndex + 1} 
-                  total={questions.length} 
+                  total={categoryQuestions.length} 
                   className="animate-fade-in"
                 />
               </div>
               
               {currentQuestion && (
-                <QuestionCard 
+                <QuestionView 
                   question={currentQuestion}
-                  onAnswer={handleAnswer}
+                  answer={answers[currentQuestion.id]}
+                  onRate={(rating) => handleRating(currentQuestion.id, rating)}
+                  onAddNotes={(notes) => handleNotes(currentQuestion.id, notes)}
                   onNext={handleNext}
-                  key={currentQuestion.id}
+                  onPrevious={handlePrevious}
+                  isFirst={currentQuestionIndex === 0}
+                  isLast={currentQuestionIndex === categoryQuestions.length - 1}
                 />
               )}
             </>
