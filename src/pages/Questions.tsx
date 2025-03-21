@@ -24,7 +24,11 @@ const Questions = () => {
         setQuestions(loadedQuestions);
       } catch (error) {
         console.error('Failed to load questions:', error);
-        toast.error('Failed to load questions. Please try again.');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load questions. Please try again."
+        });
       } finally {
         setIsLoading(false);
       }
